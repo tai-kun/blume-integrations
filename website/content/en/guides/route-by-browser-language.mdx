@@ -1,0 +1,138 @@
+---
+title: Route by browser language
+description: Redirect URLs without a language prefix to the locale that matches the visitor's browser language.
+---
+
+`routeByBrowserLanguage()` is an Astro integration that redirects requests to URLs without a language prefix, such as `/guide`, to `/ja/guide` or `/en/guide` according to the visitor's browser language. Use it together with Blume's i18n to create per-language entry points while keeping a static build.
+
+## What it does [#what-it-does]
+
+- Checks the browser's language preferences (`navigator.languages`) in order and redirects to the first matching locale. `ja-JP` matches `ja`.
+- If no language matches, chooses Blume's fallback locale, then `en`, then the first destination, limited to locales that serve the page.
+- Preserves query strings and URL fragments.
+- Displays links to the destinations on the page for clients that do not run JavaScript.
+- Hides the placeholder locale `und` from the language switcher.
+
+## How it works [#how-it-works]
+
+This integration configures three things.
+
+1. Sets Astro's `i18n.defaultLocale` to `und`. `und` is the ISO 639-2 code for "undetermined". By making the default language a code that is not a supported locale, content without pages in the default language can still be routed.
+2. Inserts CSS into every HTML page immediately before `</head>` to hide `und` in the language switcher.
+3. Adds a catch-all `/[...slug]` route that generates a redirect page at build time for each URL without a language prefix.
+
+This integration changes Astro's `i18n.defaultLocale`. You do not need to set `defaultLocale` to `und` in Blume.
+
+## Setup [#setup]
+
+```package-install
+npm i @tai-kun/blume-integrations
+```
+
+Add the integration to `integrations` in `blume.config.ts`, and add `FAKE_DEFAULT_LOCALE` to Blume's `i18n.locales`.
+
+```ts blume.config.ts
+import {
+  FAKE_DEFAULT_LOCALE,
+  routeByBrowserLanguage,
+} from "@tai-kun/blume-integrations";
+import { defineConfig } from "blume";
+
+export default defineConfig({
+  integrations: [routeByBrowserLanguage()],
+
+  i18n: {
+    locales: [
+      { code: "ja", label: "日本語" },
+      { code: "en", label: "English" },
+      FAKE_DEFAULT_LOCALE,
+    ],
+  },
+});
+```
+
+`FAKE_DEFAULT_LOCALE` is `{ code: "und", label: "und" }`. It is required so that Blume recognizes the placeholder locale. Without it, Blume does not treat `und` as a locale. You do not need to create pages for `und`.
+
+:::note
+If Blume's i18n is not configured, this integration does not create redirect pages.
+:::
+
+## Content layout [#content-layout]
+
+By default, Blume serves pages in the default locale without a language prefix. As a result, URLs that have a page in the default locale are displayed as normal pages, and no redirect page is created.
+
+If you want every URL without a language prefix to be a redirect entry point, do not put default-locale content at the root. Instead, put content in the folder for the locale you are translating, such as `ja/`. If the default locale is `en` and you serve only `ja` content, the layout looks like this.
+
+```txt
+content/
+  ja/
+    index.mdx
+    guide.mdx
+```
+
+With this layout, requests to `/` and `/guide` redirect to `/ja/` and `/ja/guide`.
+
+## Verify [#verify]
+
+Open a URL without a language prefix, such as `/guide`, on the built site. The setup works if it redirects to a page in the locale that matches the browser's language preferences. Changing the browser's language preferences changes which locale is selected.
+
+## How destinations are chosen [#matching]
+
+A redirect page only considers locales that serve that URL as destinations. Candidates follow the order of `i18n.locales`. On the client, the destination is chosen in this order.
+
+1. Check `navigator.languages` from the start for a language tag that either exactly matches a locale code or continues with `-` after the locale code. For example, `ja-JP` matches `ja`.
+2. If there is no match, choose Blume's `fallbackLocale`, but only if it serves the page.
+3. If `fallbackLocale` is not available, choose `en`, but only if it serves the page.
+4. If none is available, choose the first locale in the candidate list.
+
+| Browser language | Locales serving the page | Destination |
+| --- | --- | --- |
+| `ja-JP` | `ja`, `en` | `/ja/guide` |
+| `en-US` | `ja`, `en` | `/en/guide` |
+| `fr-FR` | `ja`, `en` | `/en/guide` if `fallbackLocale` is `en` |
+| `fr-FR` | `ja` only | `/ja/guide` |
+
+Because redirects use `window.location.replace()`, the redirect page is not left in browser history. The visitor's language choice is not stored; each visit chooses again from the browser's language preferences.
+
+## What gets redirected [#scope]
+
+Redirect pages are not created for the following URLs.
+
+- Pages hidden in the sidebar (`sidebar.hidden: true` or `hidden: true`)
+- URLs not served by any locale
+- URLs where a real page already exists, such as a default-locale page
+
+Versioned URLs are supported too. `/v1/guide` redirects to `/ja/v1/guide`. The deployment base path and Blume's `basePath` are also included in destinations.
+
+The site root URL (`/`) redirects to a locale root with a trailing slash (`/ja/`).
+
+## Without JavaScript [#without-javascript]
+
+Redirects run in client-side JavaScript. In case it cannot run, the redirect page lists the destinations as links. AI agents and crawlers can also follow these links to reach each language's pages.
+
+## Hide und from the language switcher [#hide-placeholder]
+
+This integration inserts the following CSS immediately before `</head>` on every page.
+
+```css
+[data-blume-header] [hreflang="und"][lang="und"] {
+  display: none;
+}
+```
+
+This hides the `und` entry from the language switcher in Blume's header. The CSS is also inserted during prerendering, so it remains in the statically built HTML.
+
+If you place your own language switcher outside the header, style elements with the same attributes separately.
+
+## API [#api]
+
+| Export | Type | Description |
+| --- | --- | --- |
+| `routeByBrowserLanguage` | `() => AstroIntegration` | Creates the integration. |
+| `FAKE_DEFAULT_LOCALE` | `{ code: string; label: string }` | Definition of the placeholder locale `und`. |
+
+## Caveats [#caveats]
+
+- Because redirects use JavaScript, the redirect page may appear briefly on first load.
+- The output is static HTML. The language is not determined on the server.
+- The CSS that hides `und` in the language switcher depends on Blume's header markup (`data-blume-header`, `hreflang`, and `lang`).

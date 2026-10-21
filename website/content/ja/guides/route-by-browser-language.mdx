@@ -1,0 +1,138 @@
+---
+title: ブラウザーの言語でルーティング
+description: 言語プレフィックスのない URL を、訪問者のブラウザー言語に合うロケールへ転送します。
+---
+
+`routeByBrowserLanguage()` は、`/guide` のような言語プレフィックスのない URL へのアクセスを、訪問者のブラウザー言語に合う `/ja/guide` や `/en/guide` へ転送する Astro 統合です。Blume の i18n と組み合わせて使い、静的ビルドのまま言語別の入口を作れます。
+
+## できること [#what-it-does]
+
+- ブラウザーの言語設定（`navigator.languages`）を先頭から調べ、一致するロケールへ転送します。`ja-JP` は `ja` に一致します。
+- 一致する言語がない場合は、そのページを配信している範囲で、Blume のフォールバックロケール、`en`、転送先の先頭の順に選びます。
+- クエリ文字列と URL フラグメントを引き継ぎます。
+- JavaScript を実行しないクライアント向けに、転送先のリンクをページ上に表示します。
+- 言語スイッチャーからプレースホルダーロケール `und` を隠します。
+
+## 仕組み [#how-it-works]
+
+この統合は、次の 3 つを設定します。
+
+1. Astro の `i18n.defaultLocale` を `und` に設定します。`und` は ISO 639-2 で「言語不明」を表すコードです。対応するロケール以外のコードを既定言語にすることで、既定言語のページがないコンテンツでもルーティングできます。
+2. すべての HTML ページの `</head>` 直前に、言語スイッチャーの `und` を隠す CSS を挿入します。
+3. `/[...slug]` のキャッチオールルートを追加し、言語プレフィックスのない URL ごとにリダイレクトページをビルド時に生成します。
+
+この統合が変更するのは Astro の `i18n.defaultLocale` です。Blume 側で `defaultLocale` を `und` にする必要はありません。
+
+## セットアップ [#setup]
+
+```package-install
+npm i @tai-kun/blume-integrations
+```
+
+`blume.config.ts` の `integrations` に統合を追加し、Blume の `i18n.locales` に `FAKE_DEFAULT_LOCALE` を追加します。
+
+```ts blume.config.ts
+import {
+  FAKE_DEFAULT_LOCALE,
+  routeByBrowserLanguage,
+} from "@tai-kun/blume-integrations";
+import { defineConfig } from "blume";
+
+export default defineConfig({
+  integrations: [routeByBrowserLanguage()],
+
+  i18n: {
+    locales: [
+      { code: "ja", label: "日本語" },
+      { code: "en", label: "English" },
+      FAKE_DEFAULT_LOCALE,
+    ],
+  },
+});
+```
+
+`FAKE_DEFAULT_LOCALE` は `{ code: "und", label: "und" }` です。Blume にプレースホルダーロケールを認識させるために必要です。追加しない場合、`und` は Blume のロケールとして扱われません。`und` 用のページを用意する必要はありません。
+
+:::note
+Blume の i18n が設定されていない場合、この統合はリダイレクトページを作成しません。
+:::
+
+## コンテンツの配置 [#content-layout]
+
+Blume は既定の設定では、既定ロケールのページを言語プレフィックスなしで配信します。そのため、既定ロケールのページがある URL は通常のページとして表示され、リダイレクトページは作成されません。
+
+言語プレフィックスのない URL をすべてリダイレクトの入口にしたい場合は、既定ロケールのコンテンツをルートに置かず、翻訳するロケールのフォルダー（`ja/` など）にコンテンツを置きます。既定ロケールが `en` で、`ja` のコンテンツだけを配信する場合は、次のようになります。
+
+```txt
+content/
+  ja/
+    index.mdx
+    guide.mdx
+```
+
+この構成では、`/` や `/guide` へのアクセスを `/ja/` や `/ja/guide` へ転送します。
+
+## 動作確認 [#verify]
+
+ビルドしたサイトで、言語プレフィックスのない URL（`/guide` など）を開きます。ブラウザーの言語設定に一致するロケールのページへ転送されれば成功です。ブラウザーの言語設定を変えると、選ばれるロケールも変わります。
+
+## 転送先の選び方 [#matching]
+
+リダイレクトページは、その URL を配信しているロケールだけを転送先の候補にします。候補は `i18n.locales` の設定順です。クライアント側では次の順に転送先を決めます。
+
+1. `navigator.languages` を先頭から調べ、ロケールコードと完全に一致するか、ロケールコードの後ろに `-` が続く言語タグを探します。たとえば `ja-JP` は `ja` に一致します。
+2. 一致するものがない場合は、Blume の `fallbackLocale` を選びます。ただし、そのページを配信している場合に限ります。
+3. `fallbackLocale` が使えない場合は `en` を選びます。ただし、そのページを配信している場合に限ります。
+4. どれも使えない場合は、候補の先頭のロケールを選びます。
+
+| ブラウザーの言語 | ページを配信するロケール | 転送先 |
+| --- | --- | --- |
+| `ja-JP` | `ja`、`en` | `/ja/guide` |
+| `en-US` | `ja`、`en` | `/en/guide` |
+| `fr-FR` | `ja`、`en` | `fallbackLocale` が `en` なら `/en/guide` |
+| `fr-FR` | `ja` のみ | `/ja/guide` |
+
+転送では `window.location.replace()` を使うため、ブラウザーの履歴にはリダイレクトページが残りません。訪問者の言語の選択は保存されず、アクセスのたびにブラウザーの言語設定から選び直します。
+
+## リダイレクトの対象 [#scope]
+
+次の URL にはリダイレクトページを作成しません。
+
+- サイドバーで非表示にしたページ（`sidebar.hidden: true` または `hidden: true`）
+- どのロケールも配信していない URL
+- 実際のページがすでに存在する URL（既定ロケールのページなど）
+
+バージョン付きの URL にも対応します。`/v1/guide` は `/ja/v1/guide` へ転送します。デプロイ先のベースパスと Blume の `basePath` も転送先に含まれます。
+
+サイトのルート URL（`/`）は、末尾にスラッシュを付けたロケールのルート（`/ja/`）へ転送します。
+
+## JavaScript を実行しない場合 [#without-javascript]
+
+転送はクライアント側の JavaScript で行います。実行できない場合に備えて、リダイレクトページには転送先の一覧がリンクとして表示されます。AI エージェントやクローラーも、このリンクから各言語のページへ到達できます。
+
+## 言語スイッチャーから und を隠す [#hide-placeholder]
+
+この統合は、全ページの `</head>` 直前に次の CSS を挿入します。
+
+```css
+[data-blume-header] [hreflang="und"][lang="und"] {
+  display: none;
+}
+```
+
+これにより、Blume のヘッダーにある言語スイッチャーから `und` の項目が隠れます。CSS はプリレンダー時にも挿入されるため、静的ビルドの HTML に残ります。
+
+ヘッダー以外に独自の言語スイッチャーを置いている場合は、同じ属性を持つ要素に別途スタイルを当ててください。
+
+## API [#api]
+
+| エクスポート | 型 | 説明 |
+| --- | --- | --- |
+| `routeByBrowserLanguage` | `() => AstroIntegration` | 統合を作成します。 |
+| `FAKE_DEFAULT_LOCALE` | `{ code: string; label: string }` | プレースホルダーロケール `und` の定義です。 |
+
+## 注意点 [#caveats]
+
+- リダイレクトは JavaScript で行うため、初回表示時に一瞬リダイレクトページが表示されることがあります。
+- 生成されるのは静的な HTML です。サーバー側で言語を判定するわけではありません。
+- 言語スイッチャーの `und` を隠す CSS は、Blume のヘッダーのマークアップ（`data-blume-header`、`hreflang`、`lang`）に依存します。

@@ -1,0 +1,137 @@
+---
+title: TypeTable の行に ID を付ける
+description: TypeTable の各行に固定 ID を付け、特定のプロパティへ直接リンクできるようにします。
+---
+
+`typeTableDetailsIds()` は、Blume の `TypeTable` が描画するプロパティ行（`<details>`）に `id` 属性を付けます。プロパティ名はその ID へのリンクになるため、ページ内の特定のプロパティへ直接リンクできます。
+
+## セットアップ [#setup]
+
+```package-install
+npm i @tai-kun/blume-integrations
+```
+
+`blume.config.ts` の `integrations` に追加します。追加の設定はありません。
+
+```ts blume.config.ts
+import { typeTableDetailsIds } from "@tai-kun/blume-integrations";
+import { defineConfig } from "blume";
+
+export default defineConfig({
+  integrations: [typeTableDetailsIds()],
+});
+```
+
+## 使い方 [#usage]
+
+`TypeTable` の各行の `type` の値の先頭に `[#id]` を書きます。次の例では、`label` 行に `prop-label` という ID が付きます。
+
+<TypeTable
+  type={{
+    label: {
+      type: "[#prop-label] string",
+      required: true,
+      description: "ボタンに表示するラベルです。",
+    },
+    disabled: {
+      type: "boolean",
+      description: "ボタンを無効にします。",
+    },
+  }}
+/>
+
+上の表では、`label` が `#prop-label` へのリンクになっています。ソースは次のとおりです。
+
+```astro
+<TypeTable
+  type={{
+    label: {
+      type: "[#prop-label] string",
+      required: true,
+      description: "ボタンに表示するラベルです。",
+    },
+    disabled: {
+      type: "boolean",
+      description: "ボタンを無効にします。",
+    },
+  }}
+/>
+```
+
+`[#prop-label]` は表示される型から取り除かれ、型名は `string` のまま表示されます。展開後の「Type」欄にもマーカーは残りません。
+
+## 表示される HTML [#output]
+
+変換後の行は次のような HTML になります。
+
+```html
+<details class="group/tt ..." id="prop-label">
+  <summary ...>
+    <code ...>
+      <a class="blume-type-table-details-link" href="#prop-label">label</a>
+    </code>
+    <code ...>string</code>
+    ...
+  </summary>
+  ...
+</details>
+```
+
+`class` や要素の構造は Blume のバージョンによって変わります。ID とリンクの追加に必要な要素だけを示しています。
+
+## 特定のプロパティへリンクする [#link-to-property]
+
+同じページ内では `#prop-label`、別のページからは `/components/button#prop-label` のようにリンクします。
+
+```md
+[ボタンの label プロパティ](/components/button#prop-label)
+```
+
+## ID の規則 [#id-rules]
+
+- ID は `type` の先頭に書きます。先頭の空白は無視されます。
+- マーカーがない行には `id` を付けません。
+- ID に空白と `]` は使えません。`[#prop-label]` は有効ですが、`[#prop label]` は無効です。URL フラグメントとして使うため、英数字とハイフンで構成するのがおすすめです。
+- 先頭以外に書いたマーカーは変換されず、そのまま型名として表示されます。
+- マーカーは表示される型から取り除かれます。展開後の型の表示からも取り除かれます。
+- すでに `<details>` に `id` がある場合は、その ID を変更しません。プロパティ名のリンクは既存の ID を指します。
+- プロパティ名側に `[#...]` を書いても ID にはなりません。
+- `TypeTable` 以外の `<details>` 要素は変更しません。
+- `typeDescriptionLink` を設定している場合も、リンク先の属性を保ったままマーカーだけを取り除きます。
+- 同じページで同じ ID を複数回使うと、リンク先が重複します。プロパティごとに一意な ID を付けてください。
+- マーカーに HTML エンティティーが含まれる場合は、デコードした値が ID に使われます。
+
+## リンクのスタイル [#styling]
+
+プロパティ名のリンクには `blume-type-table-details-link` クラスが付きます。統合は、リンクが周囲の文字と同じ見た目になるように次の CSS も挿入します。
+
+```css
+.blume-type-table-details-link {
+  color: inherit;
+  cursor: inherit;
+  font: inherit;
+  text-decoration: inherit;
+}
+```
+
+見た目を変えたい場合は、サイトの CSS でこのクラスをより高い優先度のセレクターで上書きします。たとえば、ホバー時に下線を表示できます。
+
+```css
+.blume-type-table-details-link:hover {
+  text-decoration: underline;
+}
+```
+
+この CSS は、マーカーが 1 つ以上変換されたページにだけ挿入されます。
+
+## 仕組みと注意点 [#how-it-works]
+
+この統合は、Astro の middleware で HTML レスポンスを書き換えます。Blume の icon-sprite middleware と同じくプリレンダー時にも実行されるため、静的ビルドされた HTML にも ID とリンクが残ります。
+
+変換の対象は、Blume の `TypeTable` が出力する `group/tt` クラスを持つ `<details>` 要素です。Blume の `TypeTable` のマークアップに依存するため、Blume のアップデートでクラス名や構造が変わった場合は、統合側の更新が必要になることがあります。
+
+## API [#api]
+
+| エクスポート | 型 | 説明 |
+| --- | --- | --- |
+| `typeTableDetailsIds` | `() => AstroIntegration` | 統合を作成します。 |

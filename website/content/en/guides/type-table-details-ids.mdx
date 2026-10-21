@@ -1,0 +1,137 @@
+---
+title: Add IDs to TypeTable rows
+description: Add stable IDs to each TypeTable row so you can link directly to a specific property.
+---
+
+`typeTableDetailsIds()` adds an `id` attribute to the property rows (`<details>`) rendered by Blume's `TypeTable`. Property names become links to those IDs, so you can link directly to a specific property on a page.
+
+## Setup [#setup]
+
+```package-install
+npm i @tai-kun/blume-integrations
+```
+
+Add it to `integrations` in `blume.config.ts`. No additional configuration is needed.
+
+```ts blume.config.ts
+import { typeTableDetailsIds } from "@tai-kun/blume-integrations";
+import { defineConfig } from "blume";
+
+export default defineConfig({
+  integrations: [typeTableDetailsIds()],
+});
+```
+
+## Usage [#usage]
+
+Write `[#id]` at the beginning of the `type` value for each `TypeTable` row. In the following example, the `label` row gets the ID `prop-label`.
+
+<TypeTable
+  type={{
+    label: {
+      type: "[#prop-label] string",
+      required: true,
+      description: "The label displayed on the button.",
+    },
+    disabled: {
+      type: "boolean",
+      description: "Disables the button.",
+    },
+  }}
+/>
+
+In the table above, `label` links to `#prop-label`. The source is as follows.
+
+```astro
+<TypeTable
+  type={{
+    label: {
+      type: "[#prop-label] string",
+      required: true,
+      description: "The label displayed on the button.",
+    },
+    disabled: {
+      type: "boolean",
+      description: "Disables the button.",
+    },
+  }}
+/>
+```
+
+`[#prop-label]` is removed from the displayed type, so the type name still appears as `string`. The marker does not remain in the expanded "Type" column either.
+
+## Rendered HTML [#output]
+
+A transformed row looks like the following HTML.
+
+```html
+<details class="group/tt ..." id="prop-label">
+  <summary ...>
+    <code ...>
+      <a class="blume-type-table-details-link" href="#prop-label">label</a>
+    </code>
+    <code ...>string</code>
+    ...
+  </summary>
+  ...
+</details>
+```
+
+The `class` attributes and element structure vary by Blume version. Only the elements needed to add the ID and link are shown.
+
+## Linking to a property [#link-to-property]
+
+Within the same page, link with `#prop-label`. From another page, use a link such as `/components/button#prop-label`.
+
+```md
+[The button's label property](/components/button#prop-label)
+```
+
+## ID rules [#id-rules]
+
+- Write the ID at the beginning of `type`. Leading whitespace is ignored.
+- Rows without a marker do not get an `id`.
+- IDs cannot contain whitespace or `]`. `[#prop-label]` is valid, but `[#prop label]` is not. Because IDs are used as URL fragments, use letters, digits, and hyphens.
+- Markers placed anywhere other than the beginning are not transformed and appear as part of the type name.
+- Markers are removed from the displayed type, including the expanded type display.
+- If a `<details>` element already has an `id`, that ID is left unchanged. The property-name link points to the existing ID.
+- Writing `[#...]` on the property-name side does not create an ID.
+- `<details>` elements outside `TypeTable` are not modified.
+- If `typeDescriptionLink` is configured, its link attributes are preserved and only the marker is removed.
+- Using the same ID more than once on a page creates duplicate link targets. Give each property a unique ID.
+- If a marker contains HTML entities, the decoded value is used as the ID.
+
+## Link styling [#styling]
+
+The property-name link gets the `blume-type-table-details-link` class. The integration also inserts the following CSS so that the link looks the same as the surrounding text.
+
+```css
+.blume-type-table-details-link {
+  color: inherit;
+  cursor: inherit;
+  font: inherit;
+  text-decoration: inherit;
+}
+```
+
+To change the appearance, override this class in your site's CSS with a selector of higher specificity. For example, you can show an underline on hover.
+
+```css
+.blume-type-table-details-link:hover {
+  text-decoration: underline;
+}
+```
+
+This CSS is inserted only on pages where at least one marker was transformed.
+
+## How it works and caveats [#how-it-works]
+
+This integration rewrites HTML responses in Astro middleware. Like Blume's icon-sprite middleware, it also runs during prerendering, so IDs and links remain in the statically built HTML.
+
+It transforms `<details>` elements with the `group/tt` class output by Blume's `TypeTable`. Because this depends on Blume's `TypeTable` markup, changes to class names or structure in a Blume update may require an update to this integration.
+
+## API [#api]
+
+| Export | Type | Description |
+| --- | --- | --- |
+| `typeTableDetailsIds` | `() => AstroIntegration` | Creates the integration. |
