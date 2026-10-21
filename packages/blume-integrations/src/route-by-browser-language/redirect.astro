@@ -23,6 +23,31 @@ const fallbackLocale = [data.config.i18n?.fallbackLocale, "en"].find(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="dark light">
+    <style is:inline>
+      /* 転送が完了するまでの一瞬だけ内容が表示されるのを防ぎます。 */
+      body {
+        animation: show-content 1s step-end;
+      }
+
+      @keyframes show-content {
+        from {
+          visibility: hidden;
+        }
+
+        to {
+          visibility: visible;
+        }
+      }
+    </style>
+    <noscript>
+      <style is:inline>
+        /* JavaScript が動かない場合は転送できないため、最初から内容を表示します。 */
+        body {
+          animation: none;
+          visibility: visible;
+        }
+      </style>
+    </noscript>
     <script
       is:inline
       define:vars={{
