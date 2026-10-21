@@ -32,13 +32,30 @@ const fallbackLocale = [data.config.i18n?.fallbackLocale, "en"].find(
       }}
     >
       (() => {
+        const findLocale = (language) => {
+          const tag = language.toLowerCase();
+          return locales.find(locale => {
+            const code = locale.toLowerCase();
+            return tag === code || tag.startsWith(`${code}-`);
+          });
+        };
+
         const matchLocale = () => {
+          // Blume の言語スイッチャーが保存したロケールを、ブラウザーの言語設定より優先します。
+          // ストレージが使えない環境では、ブラウザーの言語設定から選びます。
+          try {
+            const stored = window.localStorage.getItem("blume-locale");
+            const matched = stored ? findLocale(stored) : undefined;
+
+            if (matched) {
+              return matched;
+            }
+          } catch {
+            // ストレージへのアクセスが拒否された場合は、ブラウザーの言語設定に従います。
+          }
+
           for (const language of window.navigator.languages ?? []) {
-            const tag = language.toLowerCase();
-            const matched = locales.find(locale => {
-              const code = locale.toLowerCase();
-              return tag === code || tag.startsWith(`${code}-`);
-            });
+            const matched = findLocale(language);
 
             if (matched) {
               return matched;

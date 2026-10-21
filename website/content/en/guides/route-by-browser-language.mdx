@@ -7,8 +7,9 @@ description: Redirect URLs without a language prefix to the locale that matches 
 
 ## What it does [#what-it-does]
 
+- Uses the locale saved in `localStorage` under `blume-locale`, which Blume's language switcher writes, when it serves the page. This takes priority over the browser's language preferences.
 - Checks the browser's language preferences (`navigator.languages`) in order and redirects to the first matching locale. `ja-JP` matches `ja`.
-- If no language matches, chooses Blume's fallback locale, then `en`, then the first destination, limited to locales that serve the page.
+- If neither the saved locale nor a browser language matches, chooses Blume's fallback locale, then `en`, then the first destination, limited to locales that serve the page.
 - Preserves query strings and URL fragments.
 - Displays links to the destinations on the page for clients that do not run JavaScript.
 - Hides the placeholder locale `und` from the language switcher.
@@ -74,16 +75,17 @@ With this layout, requests to `/` and `/guide` redirect to `/ja/` and `/ja/guide
 
 ## Verify [#verify]
 
-Open a URL without a language prefix, such as `/guide`, on the built site. The setup works if it redirects to a page in the locale that matches the browser's language preferences. Changing the browser's language preferences changes which locale is selected.
+Open a URL without a language prefix, such as `/guide`, on the built site. The setup works if it redirects to a page in the locale that matches the browser's language preferences, or to the language last chosen in Blume's language switcher. Changing the browser's language preferences changes which locale is selected when no choice has been saved.
 
 ## How destinations are chosen [#matching]
 
 A redirect page only considers locales that serve that URL as destinations. Candidates follow the order of `i18n.locales`. On the client, the destination is chosen in this order.
 
-1. Check `navigator.languages` from the start for a language tag that either exactly matches a locale code or continues with `-` after the locale code. For example, `ja-JP` matches `ja`.
-2. If there is no match, choose Blume's `fallbackLocale`, but only if it serves the page.
-3. If `fallbackLocale` is not available, choose `en`, but only if it serves the page.
-4. If none is available, choose the first locale in the candidate list.
+1. If `localStorage` stores a locale under `blume-locale` and that locale serves the page, choose it. Blume's language switcher saves the language picked there under this key.
+2. Otherwise, check `navigator.languages` from the start for a language tag that either exactly matches a locale code or continues with `-` after the locale code. For example, `ja-JP` matches `ja`.
+3. If there is no match, choose Blume's `fallbackLocale`, but only if it serves the page.
+4. If `fallbackLocale` is not available, choose `en`, but only if it serves the page.
+5. If none is available, choose the first locale in the candidate list.
 
 | Browser language | Locales serving the page | Destination |
 | --- | --- | --- |
@@ -92,7 +94,7 @@ A redirect page only considers locales that serve that URL as destinations. Cand
 | `fr-FR` | `ja`, `en` | `/en/guide` if `fallbackLocale` is `en` |
 | `fr-FR` | `ja` only | `/ja/guide` |
 
-Because redirects use `window.location.replace()`, the redirect page is not left in browser history. The visitor's language choice is not stored; each visit chooses again from the browser's language preferences.
+Because redirects use `window.location.replace()`, the redirect page is not left in browser history. The redirect page does not write to storage; only Blume's language switcher saves the chosen locale. If storage is blocked, the saved locale cannot be read and the browser's language preferences decide the destination.
 
 ## What gets redirected [#scope]
 
