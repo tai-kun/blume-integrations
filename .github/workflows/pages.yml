@@ -42,6 +42,10 @@ jobs:
 
       - name: "ビルド"
         run: npm run build
+        working-directory: packages/blume-integrations
+
+      - name: "ビルド"
+        run: npm run build
         working-directory: website
 
       - name: "GitHub Pages を設定"
