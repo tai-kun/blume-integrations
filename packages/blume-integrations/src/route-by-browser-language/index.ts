@@ -16,15 +16,7 @@ export function routeByBrowserLanguage(): AstroIntegration {
   return {
     name: "blume-route-by-browser-language",
     hooks: {
-      "astro:config:setup"({ injectRoute, updateConfig, addMiddleware }) {
-        // 対応するロケール以外の言語コードを規定値にすることで、既定言語のページが無いコンテンツのルーティングを可能にします。
-        // ここでは ISO 639-2 で定義されている特殊コードの 1 つである und（言語不明）を採用しています。
-        updateConfig({
-          i18n: {
-            defaultLocale: PLACEHOLDER_LOCALE_CODE,
-          },
-        });
-
+      "astro:config:setup"({ injectRoute, addMiddleware }) {
         addMiddleware({
           entrypoint: fileURLToPath(new URL("./hide-placeholder.js", import.meta.url)),
           order: "post",

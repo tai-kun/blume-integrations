@@ -9,7 +9,7 @@ description: Blume に統合を追加して、ドキュメントサイトを拡�
 
 | 統合 | 説明 | 必要な設定 |
 | --- | --- | --- |
-| `routeByBrowserLanguage()` | 言語プレフィックスのない URL を、訪問者のブラウザー言語に合うロケールへ転送します。 | Blume の i18n と `FAKE_DEFAULT_LOCALE` |
+| `routeByBrowserLanguage()` | 言語プレフィックスのない URL を、訪問者のブラウザー言語に合うロケールへ転送します。 | Blume の i18n（`defaultLocale` と `locales`）と `FAKE_DEFAULT_LOCALE` |
 | `typeTableDetailsIds()` | `TypeTable` の各行に固定 ID を付け、プロパティ名をその ID へのリンクにします。 | なし |
 
 ## 動作環境 [#requirements]
@@ -38,7 +38,7 @@ export default defineConfig({
 });
 ```
 
-`routeByBrowserLanguage()` を使う場合は、Blume の i18n 設定も必要です。設定方法は[ブラウザーの言語でルーティング](/guides/route-by-browser-language)を参照してください。
+`routeByBrowserLanguage()` を使う場合は、Blume の i18n の `defaultLocale` に `FAKE_DEFAULT_LOCALE.code` を設定し、`locales` に `FAKE_DEFAULT_LOCALE` を追加します。詳しい設定方法は[ブラウザーの言語でルーティング](/guides/route-by-browser-language)を参照してください。
 
 ## 次に読む [#next]
 

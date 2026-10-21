@@ -57,5 +57,6 @@ export default defineConfig({
       { code: "en", label: "English" },
       FAKE_DEFAULT_LOCALE,
     ],
+    defaultLocale: FAKE_DEFAULT_LOCALE.code,
   },
 });

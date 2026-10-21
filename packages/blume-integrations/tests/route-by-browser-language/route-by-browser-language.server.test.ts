@@ -118,7 +118,6 @@ describe("routeByBrowserLanguage", () => {
   it("リダイレクト経路と middleware を登録する", async () => {
     const injectRoute = vi.fn<(route: { entrypoint: string }) => void>();
     const addMiddleware = vi.fn<(middleware: { entrypoint: string }) => void>();
-    const updateConfig = vi.fn<(config: unknown) => void>();
     const integration = routeByBrowserLanguage();
     const setup = integration.hooks?.["astro:config:setup"];
     expect(setup).toBeDefined();
@@ -128,7 +127,6 @@ describe("routeByBrowserLanguage", () => {
         i18n: { defaultLocale: "und", locales: ["ja", "en", "und"], routing: {} },
       },
       injectRoute,
-      updateConfig,
     } as never);
     expect(injectRoute).toHaveBeenCalledWith(
       expect.objectContaining({ pattern: "/[...slug]", prerender: true }),
@@ -136,36 +134,6 @@ describe("routeByBrowserLanguage", () => {
     expect(addMiddleware).toHaveBeenCalledWith(expect.objectContaining({ order: "post" }));
     const entrypoint = addMiddleware.mock.calls[0]?.[0]?.entrypoint as string;
     expect(entrypoint).toMatch(/route-by-browser-language[\\/]hide-placeholder\.js$/);
-  });
-
-  it("Astro 側 i18n の既定言語を und にする", async () => {
-    const injectRoute = vi.fn<(route: { entrypoint: string }) => void>();
-    const addMiddleware = vi.fn<(middleware: { entrypoint: string }) => void>();
-    const updateConfig = vi.fn<(config: { i18n?: { defaultLocale?: string } }) => void>();
-    await routeByBrowserLanguage().hooks?.["astro:config:setup"]?.({
-      addMiddleware,
-      config: { i18n: { defaultLocale: "en", locales: ["ja", "en"], routing: {} } },
-      injectRoute,
-      updateConfig,
-    } as never);
-    expect(updateConfig).toHaveBeenCalledOnce();
-    expect(updateConfig.mock.calls[0]?.[0]?.i18n?.defaultLocale).toBe("und");
-  });
-
-  it("Astro 側 i18n に und があっても既定言語を und にする", async () => {
-    const injectRoute = vi.fn<(route: { entrypoint: string }) => void>();
-    const addMiddleware = vi.fn<(middleware: { entrypoint: string }) => void>();
-    const updateConfig = vi.fn<(config: { i18n?: { defaultLocale?: string } }) => void>();
-    await routeByBrowserLanguage().hooks?.["astro:config:setup"]?.({
-      addMiddleware,
-      config: {
-        i18n: { defaultLocale: "und", locales: ["ja", "en", "und"], routing: {} },
-      },
-      injectRoute,
-      updateConfig,
-    } as never);
-    expect(updateConfig).toHaveBeenCalledOnce();
-    expect(updateConfig.mock.calls[0]?.[0]?.i18n?.defaultLocale).toBe("und");
   });
 });
 

@@ -16,13 +16,12 @@ description: 言語プレフィックスのない URL を、訪問者のブラ�
 
 ## 仕組み [#how-it-works]
 
-この統合は、次の 3 つを設定します。
+Blume の既定ロケールを `und` に設定したうえで、この統合は次の 2 つを追加します。
 
-1. Astro の `i18n.defaultLocale` を `und` に設定します。`und` は ISO 639-2 で「言語不明」を表すコードです。対応するロケール以外のコードを既定言語にすることで、既定言語のページがないコンテンツでもルーティングできます。
-2. すべての HTML ページの `</head>` 直前に、言語スイッチャーの `und` を隠す CSS を挿入します。
-3. `/[...slug]` のキャッチオールルートを追加し、言語プレフィックスのない URL ごとにリダイレクトページをビルド時に生成します。
+1. すべての HTML ページの `</head>` 直前に、言語スイッチャーの `und` を隠す CSS を挿入します。
+2. `/[...slug]` のキャッチオールルートを追加し、言語プレフィックスのない URL ごとにリダイレクトページをビルド時に生成します。
 
-この統合が変更するのは Astro の `i18n.defaultLocale` です。Blume 側で `defaultLocale` を `und` にする必要はありません。
+この統合は Astro や Blume の i18n 設定を変更しません。`i18n.defaultLocale` には `FAKE_DEFAULT_LOCALE.code`（`und`）を自分で設定してください。`und` を既定ロケールにすると、翻訳するロケール（`ja` や `en` など）は言語プレフィックス付きで配信され、コンテンツのルートにページを置かない限り、言語プレフィックスのない URL に実ページは存在しません。この統合は、その空いた URL をリダイレクトの入口として使います。
 
 ## セットアップ [#setup]
 
@@ -30,7 +29,7 @@ description: 言語プレフィックスのない URL を、訪問者のブラ�
 npm i @tai-kun/blume-integrations
 ```
 
-`blume.config.ts` の `integrations` に統合を追加し、Blume の `i18n.locales` に `FAKE_DEFAULT_LOCALE` を追加します。
+`blume.config.ts` の `integrations` に統合を追加し、Blume の `i18n.defaultLocale` に `FAKE_DEFAULT_LOCALE.code` を設定したうえで、`i18n.locales` に `FAKE_DEFAULT_LOCALE` を追加します。
 
 ```ts blume.config.ts
 import {
@@ -43,6 +42,7 @@ export default defineConfig({
   integrations: [routeByBrowserLanguage()],
 
   i18n: {
+    defaultLocale: FAKE_DEFAULT_LOCALE.code,
     locales: [
       { code: "ja", label: "日本語" },
       { code: "en", label: "English" },
@@ -52,7 +52,7 @@ export default defineConfig({
 });
 ```
 
-`FAKE_DEFAULT_LOCALE` は `{ code: "und", label: "und" }` です。Blume にプレースホルダーロケールを認識させるために必要です。追加しない場合、`und` は Blume のロケールとして扱われません。`und` 用のページを用意する必要はありません。
+`FAKE_DEFAULT_LOCALE` は `{ code: "und", label: "und" }` です。`und` は ISO 639-2 で言語不明を表すコードです。`defaultLocale` にはこの `code` を設定し、`locales` にも追加して、Blume にプレースホルダーロケールを認識させます。`und` 用のページを用意する必要はありません。コンテンツのルートにはページを置かないでください。配置方法は後述します。
 
 :::note
 Blume の i18n が設定されていない場合、この統合はリダイレクトページを作成しません。
@@ -60,18 +60,21 @@ Blume の i18n が設定されていない場合、この統合はリダイレ�
 
 ## コンテンツの配置 [#content-layout]
 
-Blume は既定の設定では、既定ロケールのページを言語プレフィックスなしで配信します。そのため、既定ロケールのページがある URL は通常のページとして表示され、リダイレクトページは作成されません。
-
-言語プレフィックスのない URL をすべてリダイレクトの入口にしたい場合は、既定ロケールのコンテンツをルートに置かず、翻訳するロケールのフォルダー（`ja/` など）にコンテンツを置きます。既定ロケールが `en` で、`ja` のコンテンツだけを配信する場合は、次のようになります。
+`und` が既定ロケールなので、Blume は既定ロケールのページをコンテンツのルートに探します。ルートにはページを置かず、すべてのページを `ja/` や `en/` などのロケールのフォルダーに置きます。
 
 ```txt
 content/
+  en/
+    index.mdx
+    guide.mdx
   ja/
     index.mdx
     guide.mdx
 ```
 
-この構成では、`/` や `/guide` へのアクセスを `/ja/` や `/ja/guide` へ転送します。
+この構成では、`/` や `/guide` へのアクセスを、訪問者の言語に応じて `/ja/` や `/en/`、`/ja/guide` や `/en/guide` へ転送します。
+
+コンテンツのルートにページを置くと、Blume はそのページを `und` として言語プレフィックスなしで配信します。その URL には実ページが存在するため、この統合はリダイレクトページを作成しません。
 
 ## 動作確認 [#verify]
 
@@ -131,10 +134,11 @@ content/
 | エクスポート | 型 | 説明 |
 | --- | --- | --- |
 | `routeByBrowserLanguage` | `() => AstroIntegration` | 統合を作成します。 |
-| `FAKE_DEFAULT_LOCALE` | `{ code: string; label: string }` | プレースホルダーロケール `und` の定義です。 |
+| `FAKE_DEFAULT_LOCALE` | `{ code: string; label: string }` | Blume の `defaultLocale` と `locales` に設定するプレースホルダーロケール `und` です。 |
 
 ## 注意点 [#caveats]
 
+- Blume の `i18n.defaultLocale` を `und` に設定し、コンテンツのルートにはページを置かないでください。言語プレフィックスのない URL に実ページがある場合、そのページはそのまま配信され、転送されません。
 - リダイレクトは JavaScript で行うため、初回表示時に一瞬リダイレクトページが表示されることがあります。
 - 生成されるのは静的な HTML です。サーバー側で言語を判定するわけではありません。
 - 言語スイッチャーの `und` を隠す CSS は、Blume のヘッダーのマークアップ（`data-blume-header`、`hreflang`、`lang`）に依存します。

@@ -9,7 +9,7 @@ description: Follow these steps to add integrations to Blume and extend your doc
 
 | Integration | Description | Required configuration |
 | --- | --- | --- |
-| `routeByBrowserLanguage()` | Redirects URLs without a language prefix to the locale that matches the visitor's browser language. | Blume's i18n and `FAKE_DEFAULT_LOCALE` |
+| `routeByBrowserLanguage()` | Redirects URLs without a language prefix to the locale that matches the visitor's browser language. | Blume's i18n (`defaultLocale` and `locales`) and `FAKE_DEFAULT_LOCALE` |
 | `typeTableDetailsIds()` | Adds stable IDs to each `TypeTable` row and turns property names into links to those IDs. | None |
 
 ## Requirements [#requirements]
@@ -38,7 +38,7 @@ export default defineConfig({
 });
 ```
 
-To use `routeByBrowserLanguage()`, you also need to configure Blume's i18n. See [Route by browser language](/guides/route-by-browser-language) for setup instructions.
+To use `routeByBrowserLanguage()`, set Blume's i18n `defaultLocale` to `FAKE_DEFAULT_LOCALE.code` and add `FAKE_DEFAULT_LOCALE` to `locales`. See [Route by browser language](/guides/route-by-browser-language) for the full setup.
 
 ## Read next [#next]
 
