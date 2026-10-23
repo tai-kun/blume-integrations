@@ -31,7 +31,7 @@ export interface RedirectPathProps {
   /**
    * クライアント側で転送先の URL を組み立てるためのプレフィックスです。
    *
-   * デプロイ先のベースパスと Blume のベースパスを連結した値です。
+   * デフォルトのベースパスと Blume のベースパスを連結した値です。
    */
   basePath: string;
 
@@ -43,13 +43,13 @@ export interface RedirectPathProps {
 }
 
 /**
- * ロケールなしの URL からロケール付きの URL へ転送するページです。
+ * デフォルトロケールのプレフィックス付き URL から、プレフィックスなしの URL へ転送するページです。
  */
 export interface RedirectPath {
   params: {
     /**
      * ベースパスを含むルートパラメーターです。
-     * 未定義の場合はサイトのルートを表します。
+     * 未定義の場合はデフォルトロケールのルートを表します。
      */
     slug: string | undefined;
   };
@@ -57,125 +57,308 @@ export interface RedirectPath {
 }
 
 /**
- * トップレベルのコンテンツをルーティングするためのプレースホルダーロケールのコードです。
- *
- * ISO 639-2 で定義されている特殊コードの 1 つである und（言語不明）を採用しています。
+ * デフォルトロケールのページを、訪問者の言語に合わせた URL へ転送するための情報です。
  */
-export const PLACEHOLDER_LOCALE_CODE = "und";
+export interface LocaleRedirect {
+  /**
+   * デフォルトロケールのコードです。
+   */
+  defaultLocale: string;
 
-/**
- * Blume がトップレベルのコンテンツをルーティングするために設定するプレースホルダーロケールかどうかを判定します。
- */
-const isPlaceholderLocale = (code: string): boolean => code === PLACEHOLDER_LOCALE_CODE;
+  /**
+   * このページを配信しているロケールのコードです。
+   * 設定順に並び、デフォルトロケールを含みます。
+   */
+  locales: string[];
+
+  /**
+   * デフォルト以外のロケールの転送先です。
+   * キーはロケールコード、値はサイトのルートからのパスです。
+   */
+  targets: Record<string, string>;
+
+  /**
+   * 言語設定に合うロケールがなかった場合のロケールです。
+   */
+  fallbackLocale: string | null;
+}
 
 /**
  * ロケール付きのルートから、ロケールとロケールなしの URL の slug を取り出します。
  */
 const parseRoute = (
   route: BlumeRoute,
-  basePath: string,
-  locales: ReadonlySet<string>,
+  data: BlumeData,
 ): { locale: string; slug: string } | undefined => {
+  const { basePath, i18n } = data.config;
+  if (!i18n) {
+    return undefined;
+  }
+
   // サイドバー非表示のページにはリダイレクトページを作りません。
   // `indexable` は検索の有効・無効にも左右されるため、判定には使いません。
-  if (route.hidden || !locales.has(route.locale) || !route.path.startsWith(basePath)) {
+  if (route.hidden || !i18n.locales.some((locale) => locale.code === route.locale)) {
+    return undefined;
+  }
+
+  if (route.path !== basePath && !route.path.startsWith(`${basePath}/`)) {
     return undefined;
   }
 
   const segments = route.path.slice(basePath.length).split("/").filter(Boolean);
-  if (segments[0] !== route.locale) {
-    return undefined;
-  }
-  segments.shift();
-
-  // バージョンはロケールの直後に付きます。
-  // Blume が解決したバージョンを使い、`videos` のようなページ名と取り違えないようにします。
-  let version = "";
-  if (route.version !== "") {
-    if (segments[0] !== route.version) {
+  // デフォルトロケールは、プレフィックスを隠している場合は URL に現れません。
+  const prefixed = !(route.locale === i18n.defaultLocale && i18n.hideDefaultLocalePrefix);
+  if (prefixed) {
+    if (segments[0] !== route.locale) {
       return undefined;
     }
-    version = segments.shift() ?? "";
+    segments.shift();
   }
 
   return {
     locale: route.locale,
-    slug: [version, ...segments].filter(Boolean).join("/"),
+    slug: segments.join("/"),
   };
 };
 
 /**
- * Blume が生成するロケールなしの URL (`/rest`、`/version/rest`) を、ロケール付きの URL (`/locale/rest`、`/locale/version/rest`) へ転送するリダイレクトページの一覧を作成します。
+ * サイトのデータごとに、同じページを配信しているロケールの一覧をキャッシュします。
+ */
+const routesBySlugCache = new WeakMap<BlumeData, Map<string, Map<string, string>>>();
+
+/**
+ * 同じページを配信しているロケールを slug ごとに集約します。
+ */
+const collectRoutes = (data: BlumeData): Map<string, Map<string, string>> => {
+  const cached = routesBySlugCache.get(data);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const routesBySlug = new Map<string, Map<string, string>>();
+
+  for (const route of data.routes) {
+    const parsed = parseRoute(route, data);
+    if (parsed === undefined) {
+      continue;
+    }
+
+    const routesForLocale = routesBySlug.get(parsed.slug) ?? new Map<string, string>();
+    routesForLocale.set(parsed.locale, route.path);
+    routesBySlug.set(parsed.slug, routesForLocale);
+  }
+
+  routesBySlugCache.set(data, routesBySlug);
+  return routesBySlug;
+};
+
+/**
+ * 末尾のスラッシュを除いたパスにします。
+ * サイトのルートはそのまま `/` で表します。
+ */
+const normalizePath = (path: string): string => (path === "/" ? path : path.replace(/\/+$/, ""));
+
+/**
+ * デプロイ先のベースパスと Blume のベースパスを、末尾のスラッシュなしで連結します。
+ */
+const getSiteBase = (data: BlumeData, deployBase: string): string =>
+  `${deployBase.replace(/\/+$/, "")}${data.config.basePath}`;
+
+/**
+ * サイトのルートからのパスを、ブラウザーで使える URL に変換します。
+ */
+const toHref = (deployBase: string, path: string): string => {
+  const base = deployBase.replace(/\/+$/, "");
+  return path === "/" ? `${base}/` : `${base}${path}`;
+};
+
+/**
+ * Blume が生成するデフォルトロケールの URL (`/rest`、`/version/rest`) を、プレフィックス付きの URL (`/locale/rest`、`/locale/version/rest`) から転送するリダイレクトページの一覧を作成します。
  *
- * 各ページの `targets` には、その URL に対応するページを配信しているロケールだけを設定順で渡します。
- * これにより、クライアント側は訪問者の言語に合うロケールを選んでから転送できます。
+ * Blume はデフォルトロケールのページをプレフィックスなしで配信します。このページは、古いリンクや手入力されたプレフィックス付きの URL を、正規のプレフィックスなしの URL へ転送します。
  *
- * - サイドバー非表示のページと、どのロケールも配信していない URL は対象外です。
- * - 実在するページと同じ URL にはリダイレクトページを作成しません。
- * - JavaScript が動かない場合に備えて、転送先はページ上に一覧でも表示します。
+ * - サイドバー非表示のページは対象外です。
+ * - デフォルトロケールのプレフィックスを隠していない場合は、プレフィックス付きの URL が正規の URL なので作成しません。
  *
  * @param data Blume がビルド時に生成する、サイト全体のデータです。
  * @param deployBase デプロイ先のベースパスです。
  * Astro の `BASE_URL` (`deployment.base`) に対応し、URL の組み立てでは `data.config.basePath` の前に付きます。
- * @returns ロケールなしの URL ごとのリダイレクトページの定義です。
+ * @returns プレフィックス付きの URL ごとのリダイレクトページの定義です。
  * i18n が設定されていない場合は空の配列です。
  */
 export const getRedirectPaths = (data: BlumeData, deployBase: string = ""): RedirectPath[] => {
-  const { basePath, i18n } = data.config;
-  if (!i18n) {
+  const { i18n } = data.config;
+  if (!i18n || !i18n.hideDefaultLocalePrefix) {
     return [];
   }
 
-  const siteBase = `${deployBase.replace(/\/+$/, "")}${basePath}`;
-  const locales = i18n.locales
-    .map((locale) => locale.code)
-    .filter((code) => !isPlaceholderLocale(code));
-  const localeSet = new Set(locales);
   const localeLabels = new Map(i18n.locales.map((locale) => [locale.code, locale.label]));
+  const siteBase = getSiteBase(data, deployBase);
+  const redirects: RedirectPath[] = [];
 
-  // 同じロケールなし URL が複数のロケールから参照されるため、slug ごとにロケールを集約します。
-  const localesBySlug = new Map<string, Set<string>>();
   for (const route of data.routes) {
-    const location = parseRoute(route, basePath, localeSet);
-    if (location === undefined) {
+    const parsed = parseRoute(route, data);
+    if (parsed === undefined || parsed.locale !== i18n.defaultLocale) {
       continue;
     }
 
-    const slugLocales = localesBySlug.get(location.slug) ?? new Set<string>();
-    slugLocales.add(location.locale);
-    localesBySlug.set(location.slug, slugLocales);
-  }
-
-  const baseSegment = basePath.replace(/^\/+/, "");
-  const toParam = (slug: string): string | undefined =>
-    [baseSegment, slug].filter(Boolean).join("/") || undefined;
-  const toPath = (slug: string): string => {
-    const path = toParam(slug);
-    return path === undefined ? "/" : `/${path}`;
-  };
-  // サイトのルートはディレクトリーの URL になるため末尾にスラッシュを付け、それ以外はルートのパスに合わせます。
-  const toHref = (slug: string, code: string): string =>
-    slug === "" ? `${siteBase}/${code}/` : `${siteBase}/${code}/${slug}`;
-
-  // 実在するページと同じ URL にはリダイレクトページを作りません。
-  // プレースホルダーロケールがトップレベルのコンテンツを配信している場合、その URL はロケールなしの URL と一致します。
-  const taken = new Set(data.routes.map((route) => route.path));
-
-  return [...localesBySlug]
-    .filter(([slug]) => !taken.has(toPath(slug)))
-    .map(([slug, slugLocales]) => ({
+    // ルートパラメーターはデフォルトロケールの後に続きます。
+    // Blume のベースパスもパラメーターに含めることで、ベースパス付きでも URL が組み立てられます。
+    const param = normalizePath(route.path).replace(/^\/+/, "") || undefined;
+    redirects.push({
       params: {
-        slug: toParam(slug),
+        slug: param,
       },
       props: {
         basePath: siteBase,
-        targets: locales
-          .filter((code) => slugLocales.has(code))
-          .map((code) => ({
-            code,
-            label: localeLabels.get(code) ?? code,
-            href: toHref(slug, code),
-          })),
+        targets: [
+          {
+            code: i18n.defaultLocale,
+            label: localeLabels.get(i18n.defaultLocale) ?? i18n.defaultLocale,
+            href: toHref(deployBase, route.path),
+          },
+        ],
       },
-    }));
+    });
+  }
+
+  return redirects;
+};
+
+/**
+ * デフォルトロケールのページを、訪問者の言語に合わせた URL へ転送するための情報を作成します。
+ *
+ * 言語スイッチャーが保存したロケールを優先し、次にブラウザーの言語設定を使います。
+ * デフォルトロケール以外のページと、リダイレクトの必要がないページでは `undefined` を返します。
+ *
+ * @param data Blume がビルド時に生成する、サイト全体のデータです。
+ * @param pathname デプロイ先のベースパスを除いた、現在のページのパスです。
+ * @param deployBase デプロイ先のベースパスです。
+ * @returns クライアント側の転送に使う情報です。
+ * 転送先がない場合や、i18n が設定されていない場合は `undefined` です。
+ */
+export const getLocaleRedirect = (
+  data: BlumeData,
+  pathname: string,
+  deployBase: string = "",
+): LocaleRedirect | undefined => {
+  const { i18n } = data.config;
+  if (!i18n) {
+    return undefined;
+  }
+
+  const path = normalizePath(pathname);
+  let current: { locale: string; slug: string; route: BlumeRoute } | undefined;
+  for (const route of data.routes) {
+    const parsed = parseRoute(route, data);
+    if (parsed !== undefined && normalizePath(route.path) === path) {
+      current = { ...parsed, route };
+      break;
+    }
+  }
+
+  if (current === undefined || current.route.hidden || current.locale !== i18n.defaultLocale) {
+    return undefined;
+  }
+
+  const { slug } = current;
+  const routesBySlug = collectRoutes(data);
+  const routesForPage = routesBySlug.get(slug);
+  if (routesForPage === undefined) {
+    return undefined;
+  }
+
+  const targets: Record<string, string> = {};
+  const locales: string[] = [];
+  for (const locale of i18n.locales) {
+    const path = routesForPage.get(locale.code);
+    if (path === undefined) {
+      continue;
+    }
+
+    locales.push(locale.code);
+    if (locale.code !== i18n.defaultLocale) {
+      targets[locale.code] = toHref(deployBase, path);
+    }
+  }
+
+  // デフォルトロケールしか配信していない場合は、転送する必要がありません。
+  if (Object.keys(targets).length === 0) {
+    return undefined;
+  }
+
+  return {
+    defaultLocale: i18n.defaultLocale,
+    fallbackLocale: i18n.fallbackLocale,
+    locales,
+    targets,
+  };
+};
+
+/**
+ * クライアント側で転送先のロケールを選ぶスクリプトの本体です。
+ *
+ * 言語スイッチャーが保存したロケールを優先し、次にブラウザーの言語設定を先頭から調べます。
+ * どちらにも一致するロケールがない場合は、フォールバックロケール、`en`、配信しているロケールの先頭の順に選びます。
+ */
+const LOCALE_REDIRECT_CLIENT = `(redirect) => {
+  const findLocale = (language) => {
+    const tag = language.toLowerCase();
+    return redirect.locales.find(locale => {
+      const code = locale.toLowerCase();
+      return tag === code || tag.startsWith(code + "-");
+    });
+  };
+
+  const matchLocale = () => {
+    try {
+      const stored = window.localStorage.getItem("blume-locale");
+      const matched = stored ? findLocale(stored) : undefined;
+
+      if (matched) {
+        return matched;
+      }
+    } catch {
+      // ストレージへのアクセスが拒否された場合は、ブラウザーの言語設定に従います。
+    }
+
+    for (const language of window.navigator.languages ?? []) {
+      const matched = findLocale(language);
+
+      if (matched) {
+        return matched;
+      }
+    }
+
+    if (redirect.fallbackLocale && redirect.locales.includes(redirect.fallbackLocale)) {
+      return redirect.fallbackLocale;
+    }
+
+    if (redirect.locales.includes("en")) {
+      return "en";
+    }
+
+    return redirect.locales[0] ?? redirect.defaultLocale;
+  };
+
+  const locale = matchLocale();
+  if (!locale || locale === redirect.defaultLocale) {
+    return;
+  }
+
+  const target = redirect.targets[locale];
+  if (!target) {
+    return;
+  }
+
+  window.location.replace(target + window.location.search + window.location.hash);
+}`;
+
+/**
+ * デフォルトロケールのページに挿入する、クライアント側の転送スクリプトを作成します。
+ */
+export const renderLocaleRedirectScript = (redirect: LocaleRedirect): string => {
+  // `</script>` などで HTML を壊さないように、`<` をエスケープします。
+  const data = JSON.stringify(redirect).replaceAll("<", "\\u003c");
+  return `<script data-locale-redirect>(${LOCALE_REDIRECT_CLIENT})(${data});</script>`;
 };

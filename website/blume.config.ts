@@ -1,8 +1,4 @@
-import {
-  FAKE_DEFAULT_LOCALE,
-  routeByBrowserLanguage,
-  typeTableDetailsIds,
-} from "@tai-kun/blume-integrations";
+import { routeByBrowserLanguage, typeTableDetailsIds } from "@tai-kun/blume-integrations";
 import { defineConfig } from "blume";
 import { filesystem, githubReleases } from "blume/sources";
 
@@ -55,8 +51,7 @@ export default defineConfig({
     locales: [
       { code: "ja", label: "日本語" },
       { code: "en", label: "English" },
-      FAKE_DEFAULT_LOCALE,
     ],
-    defaultLocale: FAKE_DEFAULT_LOCALE.code,
+    defaultLocale: "ja",
   },
 });

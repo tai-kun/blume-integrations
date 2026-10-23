@@ -7,17 +7,17 @@ description: Follow these steps to add integrations to Blume and extend your doc
 
 ## Included integrations [#integrations]
 
-| Integration | Description | Required configuration |
-| --- | --- | --- |
-| `routeByBrowserLanguage()` | Redirects URLs without a language prefix to the locale that matches the visitor's browser language. | Blume's i18n (`defaultLocale` and `locales`) and `FAKE_DEFAULT_LOCALE` |
-| `typeTableDetailsIds()` | Adds stable IDs to each `TypeTable` row and turns property names into links to those IDs. | None |
+| Integration                | Description                                                                               | Required configuration                       |
+| -------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `routeByBrowserLanguage()` | Redirects default-locale URLs to the locale that matches the visitor's browser language.  | Blume's i18n (`defaultLocale` and `locales`) |
+| `typeTableDetailsIds()`    | Adds stable IDs to each `TypeTable` row and turns property names into links to those IDs. | None                                         |
 
 ## Requirements [#requirements]
 
-| Package | Version |
-| --- | --- |
-| Astro | 7.0.0 or later |
-| Blume | 2.0.0 or later |
+| Package | Version        |
+| ------- | -------------- |
+| Astro   | 7.0.0 or later |
+| Blume   | 2.0.0 or later |
 
 ## Install [#install]
 
@@ -38,13 +38,13 @@ export default defineConfig({
 });
 ```
 
-To use `routeByBrowserLanguage()`, set Blume's i18n `defaultLocale` to `FAKE_DEFAULT_LOCALE.code` and add `FAKE_DEFAULT_LOCALE` to `locales`. See [Route by browser language](/guides/route-by-browser-language) for the full setup.
+To use `routeByBrowserLanguage()`, set Blume's i18n `defaultLocale` to one of the codes in `locales` and keep the default locale's content at the content root. See [Route by browser language](/guides/route-by-browser-language) for the full setup.
 
 ## Read next [#next]
 
 <CardGroup cols={2}>
   <Card title="Route by browser language" href="/guides/route-by-browser-language" icon="languages">
-    Redirect URLs without a language prefix to the page that matches the visitor's language.
+    Redirect default-locale URLs to the page that matches the visitor's language.
   </Card>
   <Card title="Add IDs to TypeTable rows" href="/guides/type-table-details-ids" icon="table">
     Link directly to a specific property in a type table.
