@@ -1,5 +1,13 @@
 # Changelog
 
+## @tai-kun/blume-integrations@0.0.2
+
+### 新機能
+
+- デフォルトロケール基準のブラウザー言語ルーティングに刷新 ([c30d79a](https://github.com/tai-kun/blume-integrations/commit/c30d79a4cfd7daed9ba453d42268d759fbef2b76))
+
+**Full Changelog**: https://github.com/tai-kun/blume-integrations/compare/@tai-kun/blume-integrations@0.0.1...@tai-kun/blume-integrations@0.0.2
+
 ## @tai-kun/blume-integrations@0.0.1
 
 ### バグ修正
